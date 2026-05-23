@@ -5,6 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>আমার হিসাব — সফটওয়্যার</title>
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDB2CuPdcy3-U2cWbVPwkXLln5nsrjgKRs",
+  authDomain: "amar-hisab-a8966.firebaseapp.com",
+  projectId: "amar-hisab-a8966",
+  storageBucket: "amar-hisab-a8966.firebasestorage.app",
+  messagingSenderId: "638824662407",
+  appId: "1:638824662407:web:870a3da6a699d6eb453f22"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+</script>
 <style>
 :root {
   --bg: #f0f4ff;
@@ -1425,6 +1440,7 @@ function doLogin() {
     document.getElementById('login-screen').classList.add('hidden');
     errEl.textContent = '';
     applyRoleUI();
+    loadAllFromFirebase();
   } else {
     errEl.textContent = '❌ ভুল ব্যবহারকারীর নাম বা পাসওয়ার্ড!';
     document.getElementById('login-pass').value = '';
@@ -1468,11 +1484,56 @@ const COMPANIES = [
   { name: 'সুরমা এস এস এন্ড থাই অ্যালুমিনিয়াম', short: 'সুরমা এস এস', color: '#d97706', cls: 'active-c4' },
 ];
 
+// ===== FIREBASE DATA =====
+// Local cache — এখনো কাজ করবে, Firebase থেকেও লোড হবে
 function loadData(key, def) {
   try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; }
 }
+
+// saveData: localStorage + Firebase উভয়তেই সেভ করে
 function saveData(key, val) {
   localStorage.setItem(key, JSON.stringify(val));
+  db.collection('hisab').doc(key).set({ data: JSON.stringify(val) }).catch(e => console.warn('Firebase save error:', e));
+}
+
+// Firebase থেকে সব ডাটা লোড করো
+function loadAllFromFirebase() {
+  const keys = ['memos','purchases','advances','payments','supplierPays','manualStock','recycleBin','customSupplierEntries','customSupplierNames','memoCounter'];
+  
+  // Loading indicator দেখাও
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="fb-loading" style="position:fixed;inset:0;background:rgba(79,70,229,0.92);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:'Hind Siliguri',sans-serif;">
+      <div style="font-size:40px;margin-bottom:16px;">☁️</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px;">ডাটা লোড হচ্ছে...</div>
+      <div style="font-size:13px;opacity:0.8;">Firebase থেকে সংযুক্ত হচ্ছে</div>
+    </div>
+  `);
+
+  const promises = keys.map(key =>
+    db.collection('hisab').doc(key).get().then(doc => {
+      if (doc.exists) {
+        const val = JSON.parse(doc.data().data);
+        localStorage.setItem(key, JSON.stringify(val));
+      }
+    }).catch(e => console.warn('Firebase load error for', key, e))
+  );
+
+  Promise.all(promises).then(() => {
+    // ডাটা রিফ্রেশ করো
+    memos = loadData('memos', []);
+    purchases = loadData('purchases', []);
+    advances = loadData('advances', []);
+    payments = loadData('payments', []);
+    supplierPays = loadData('supplierPays', []);
+    manualStock = loadData('manualStock', []);
+    recycleBin = loadData('recycleBin', []);
+    customSupplierEntries = loadData('customSupplierEntries', []);
+    customSupplierNames = loadData('customSupplierNames', []);
+    memoCounter = loadData('memoCounter', 1);
+
+    document.getElementById('fb-loading')?.remove();
+    renderPage(currentPage);
+  });
 }
 
 let memos = loadData('memos', []);
@@ -2601,6 +2662,10 @@ const cseDateEl = document.getElementById('cse-date');
 if (cseDateEl) cseDateEl.value = today();
 checkSession();
 addProductRow();
+// Firebase থেকে ডাটা লোড করো (লগইন থাকলে)
+if (localStorage.getItem('tg_session') === 'ok') {
+  loadAllFromFirebase();
+}
 </script>
 </body>
 </html>
